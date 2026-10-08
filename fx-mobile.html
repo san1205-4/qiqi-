@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>FX · 手机版外汇模拟器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0a0e14; color: #e0e6ed;
+    /* 防止手机滚动回弹 */
+    overscroll-behavior-y: none;
+    /* 禁止长按选中 */
+    -webkit-user-select: none; user-select: none;
+  }
+  body { padding: 10px; padding-bottom: 80px; font-size: 14px; }
+
+  /* 顶部状态栏 */
+  .topbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 4px; margin-bottom: 10px;
+  }
+  .topbar h1 { font-size: 17px; color: #4fc3f7; }
+  .topbar .reset {
+    background: #333; color: #ccc; border: none; padding: 6px 12px;
+    border-radius: 14px; font-size: 12px;
+  }
+
+  /* 账户概览 */
+  .account {
+    background: #131a22; border-radius: 10px; padding: 12px; margin-bottom: 10px;
+  }
+  .account .row {
+    display: flex; justify-content: space-between; align-items: center; padding: 4px 0;
+  }
+  .account .label { color: #778; font-size: 12px; }
+  .account .val { font-family: Consolas, monospace; font-size: 16px; font-weight: bold; }
+  .equity-big {
+    font-size: 26px; font-weight: bold; font-family: Consolas, monospace;
+    margin: 4px 0;
+  }
+  .pos { color: #00e676; } .neg { color: #ff5252; }
+
+  /* 币种横向滚动 */
+  .sym-bar {
+    display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sym-bar::-webkit-scrollbar { display: none; }
+  .sym {
+    flex: 0 0 auto; padding: 8px 14px; background: #131a22;
+    border-radius: 20px; font-size: 13px; border: 1px solid transparent;
+  }
+  .sym.active { background: #1c2a3a; border-color: #4fc3f7; }
+  .sym .p { font-family: Consolas, monospace; font-size: 12px; display: block; margin-top: 2px; }
+
+  /* K线 */
+  .chart-wrap {
+    background: #131a22; border-radius: 10px; padding: 10px; margin-bottom: 10px;
+  }
+  .chart-head {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;
+  }
+  .price-big { font-size: 28px; font-weight: bold; font-family: Consolas, monospace; }
+  .chart-head .meta { font-size: 12px; color: #778; }
+  #chart { width: 100%; height: 220px; display: block; }
+
+  /* 交易面板 */
+  .trade-panel {
+    background: #131a22; border-radius: 10px; padding: 12px; margin-bottom: 10px;
+  }
+  .trade-panel .title { font-size: 12px; color: #667; margin-bottom: 8px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .field label { font-size: 11px; color: #778; display: block; margin-bottom: 3px; }
+  .field input, .field select {
+    width: 100%; background: #0d131a; border: 1px solid #222c38; color: #e0e6ed;
+    padding: 10px; border-radius: 6px; font-size: 15px;
+    /* 数字输入禁止滚轮 */
+    -moz-appearance: textfield;
+  }
+  .field input::-webkit-outer-spin-button,
+  .field input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  /* 买卖大按钮 */
+  .action-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .action-btns button {
+    padding: 16px; border: none; border-radius: 8px;
+    font-size: 17px; font-weight: bold; color: #fff;
+  }
+  .btn-buy { background: linear-gradient(180deg, #ff5252, #d32f2f); }
+  .btn-sell { background: linear-gradient(180deg, #2ed573, #1b9e55); color: #000 !important; }
+
+  /* 持仓 */
+  .pos-wrap { background: #131a22; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .pos-wrap .title { font-size: 12px; color: #667; margin-bottom: 8px; }
+  .pos-item {
+    background: #0d131a; padding: 10px; border-radius: 6px; margin-bottom: 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .pos-item .left { font-size: 13px; }
+  .pos-item .left .pnl { font-family: Consolas, monospace; font-size: 14px; font-weight: bold; margin-top: 2px; }
+  .pos-item .close {
+    background: #444; color: #fff; border: none; padding: 8px 12px;
+    border-radius: 6px; font-size: 12px;
+  }
+  .empty { color: #555; font-size: 12px; text-align: center; padding: 10px; }
+
+  /* 资金曲线 */
+  .equity-wrap { background: #131a22; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+  #equityCurve { width: 100%; height: 70px; display: block; }
+
+  /* 底部日志（折叠） */
+  .log-toggle {
+    background: #131a22; border-radius: 10px; padding: 10px 12px;
+    font-size: 12px; color: #778; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .log-body { display: none; max-height: 200px; overflow-y: auto; padding: 8px 12px; background: #0d131a; border-radius: 0 0 10px 10px; font-size: 11px; font-family: Consolas, monospace; }
+  .log-body.show { display: block; }
+  .log-body div { padding: 3px 0; border-bottom: 1px solid #1a2230; }
+
+  /* 底部固定资金条 */
+  .fixed-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #131a22; border-top: 1px solid #222c38;
+    padding: 10px 14px; display: flex; justify-content: space-around;
+    font-size: 12px; z-index: 100;
+  }
+  .fixed-bottom .item { text-align: center; }
+  .fixed-bottom .item .k { color: #778; font-size: 10px; }
+  .fixed-bottom .item .v { font-family: Consolas, monospace; font-weight: bold; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>FX · 手机版</h1>
+  <button class="reset" onclick="resetAll()">重置</button>
+</div>
+
+<!-- 账户 -->
+<div class="account">
+  <div class="row">
+    <span class="label">净值 Equity</span>
+    <span class="label">总盈亏 <b id="totalPnl">--</b></span>
+  </div>
+  <div class="equity-big" id="equity">--</div>
+  <div class="row">
+    <span class="label">余额</span><span class="val" id="balance">--</span>
+  </div>
+  <div class="row">
+    <span class="label">可用</span><span class="val" id="free">--</span>
+  </div>
+  <div class="row">
+    <span class="label">胜率</span><span class="val" id="winRate">--</span>
+  </div>
+</div>
+
+<!-- 币种横向滚动 -->
+<div class="sym-bar" id="symBar"></div>
+
+<!-- K线 -->
+<div class="chart-wrap">
+  <div class="chart-head">
+    <div class="price-big" id="price">--</div>
+    <div class="meta" id="tickInfo">--</div>
+  </div>
+  <canvas id="chart"></canvas>
+</div>
+
+<!-- 交易 -->
+<div class="trade-panel">
+  <div class="title">开仓参数</div>
+  <div class="grid2">
+    <div class="field">
+      <label>保证金 $</label>
+      <input type="number" id="margin" value="1000" min="10">
+    </div>
+    <div class="field">
+      <label>杠杆</label>
+      <select id="leverage">
+        <option value="10">10x</option>
+        <option value="20" selected>20x</option>
+        <option value="50">50x</option>
+        <option value="100">100x</option>
+        <option value="200">200x</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="field">
+      <label>止盈 (pips)</label>
+      <input type="number" id="tp" placeholder="可选">
+    </div>
+    <div class="field">
+      <label>止损 (pips)</label>
+      <input type="number" id="sl" placeholder="可选">
+    </div>
+  </div>
+  <div class="action-btns">
+    <button class="btn-buy" onclick="openPos('buy')">▲ 做多 BUY</button>
+    <button class="btn-sell" onclick="openPos('sell')">▼ 做空 SELL</button>
+  </div>
+</div>
+
+<!-- 持仓 -->
+<div class="pos-wrap">
+  <div class="title">持仓 (<span id="posCount">0</span>)</div>
+  <div id="positions"></div>
+</div>
+
+<!-- 资金曲线 -->
+<div class="equity-wrap">
+  <canvas id="equityCurve"></canvas>
+</div>
+
+<!-- 日志折叠 -->
+<div class="log-toggle" onclick="document.getElementById('logBody').classList.toggle('show')">
+  <span>📋 交易日志</span>
+  <span id="logArrow">▸</span>
+</div>
+<div class="log-body" id="logBody"></div>
+
+<!-- 底部固定条 -->
+<div class="fixed-bottom">
+  <div class="item"><div class="k">净值</div><div class="v" id="fbEquity">--</div></div>
+  <div class="item"><div class="k">浮盈</div><div class="v" id="fbPnl">--</div></div>
+  <div class="item"><div class="k">持仓</div><div class="v" id="fbPos">0</div></div>
+</div>
+
+<script>
+const SYMBOLS = {
+  'EUR/USD': { cn: '欧元/美元',   price: 1.0850, pip: 0.0001, spread: 0.00015, digits: 5 },
+  'GBP/USD': { cn: '英镑/美元',   price: 1.2720, pip: 0.0001, spread: 0.00018, digits: 5 },
+  'USD/JPY': { cn: '美元/日元',   price: 149.50, pip: 0.01,  spread: 0.018,   digits: 3 },
+  'AUD/USD': { cn: '澳元/美元',   price: 0.6540, pip: 0.0001, spread: 0.00016, digits: 5 },
+  'USD/CNH': { cn: '美元/离岸人民币', price: 7.2450, pip: 0.0001, spread: 0.00020, digits: 5 },
+};
+const INIT_BALANCE = 10000;
+const HISTORY_LEN = 120;
+const SAVE_KEY = 'fxpro_mobile_v1';
+
+let state = load() || {
+  balance: INIT_BALANCE,
+  positions: [],
+  closed: [],
+  history: {},
+  equityHistory: [INIT_BALANCE],
+  currentSym: 'EUR/USD',
+};
+Object.keys(SYMBOLS).forEach(s => {
+  if (!state.history[s]) state.history[s] = genCandles(SYMBOLS[s].price, 60, SYMBOLS[s].pip);
+});
+
+function genCandles(start, n, pip) {
+  const arr = []; let p = start;
+  for (let i=0; i<n; i++) {
+    const o = p;
+    const c = p + (Math.random()-0.5)*8*pip;
+    arr.push({o, h: Math.max(o,c)+Math.random()*2*pip, l: Math.min(o,c)-Math.random()*2*pip, c});
+    p = c;
+  }
+  return arr;
+}
+function save() { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }
+function load() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch(e) { return null; } }
+function resetAll() { if (confirm('重置所有数据？')) { localStorage.removeItem(SAVE_KEY); location.reload(); } }
+function r5(x) { return Math.round(x*100000)/100000; }
+
+function tick() {
+  const symName = state.currentSym;
+  const sym = SYMBOLS[symName];
+  const hist = state.history[symName];
+  const last = hist[hist.length-1];
+  last.c = r5(last.c + (Math.random()-0.5)*6*sym.pip);
+  last.h = Math.max(last.h, last.c);
+  last.l = Math.min(last.l, last.c);
+  if (Math.random() < 0.1) {
+    hist.push({o:last.c, h:last.c, l:last.c, c:last.c});
+    if (hist.length > HISTORY_LEN) hist.shift();
+  }
+  checkTPSL();
+  render();
+  save();
+}
+
+function openPos(dir) {
+  const symName = state.currentSym;
+  const sym = SYMBOLS[symName];
+  const last = state.history[symName][state.history[symName].length-1];
+  const margin = parseFloat(document.getElementById('margin').value);
+  const lev = parseInt(document.getElementById('leverage').value);
+  const tp = parseFloat(document.getElementById('tp').value) || 0;
+  const sl = parseFloat(document.getElementById('sl').value) || 0;
+  if (!margin || margin <= 0) return toast('保证金无效');
+  if (margin > state.balance) return toast('余额不足');
+  state.balance -= margin;
+  const openPrice = dir === 'buy' ? last.c + sym.spread/2 : last.c - sym.spread/2;
+  const size = (margin * lev) / openPrice;
+  state.positions.push({
+    sym: symName, dir, openPrice, size, margin, lev,
+    tp: tp ? openPrice + (dir==='buy'?tp:-tp)*sym.pip : 0,
+    sl: sl ? openPrice + (dir==='buy'?-sl:sl)*sym.pip : 0,
+  });
+  logMsg(`${symName} ${dir==='buy'?'▲BUY':'▼SELL'} @${openPrice.toFixed(sym.digits)}`);
+}
+
+function closePos(idx, reason='手动') {
+  const p = state.positions[idx];
+  const sym = SYMBOLS[p.sym];
+  const last = state.history[p.sym][state.history[p.sym].length-1];
+  const closePrice = p.dir === 'buy' ? last.c - sym.spread/2 : last.c + sym.spread/2;
+  const pnl = (closePrice - p.openPrice) * (p.dir==='buy'?1:-1) * p.size;
+  state.balance += p.margin + pnl;
+  state.closed.push({...p, closePrice, pnl, reason});
+  state.positions.splice(idx, 1);
+  logMsg(`${p.sym} ${p.dir==='buy'?'BUY':'SELL'} ${reason} PNL ${pnl>=0?'+':''}${pnl.toFixed(2)}`, pnl>=0?'pos':'neg');
+}
+
+function checkTPSL() {
+  for (let i = state.positions.length-1; i >= 0; i--) {
+    const p = state.positions[i];
+    if (p.sym !== state.currentSym) continue;
+    const sym = SYMBOLS[p.sym];
+    const last = state.history[p.sym][state.history[p.sym].length-1];
+    if (p.sl && ((p.dir==='buy' && last.c <= p.sl) || (p.dir==='sell' && last.c >= p.sl))) closePos(i, '止损');
+    else if (p.tp && ((p.dir==='buy' && last.c >= p.tp) || (p.dir==='sell' && last.c <= p.tp))) closePos(i, '止盈');
+  }
+  const eq = calcEquity();
+  if (eq <= 0 && state.positions.length > 0) {
+    logMsg('💥 爆仓！', 'err');
+    state.positions = []; state.balance = 0;
+  }
+}
+
+function floatingPnl() {
+  let pnl = 0;
+  for (const p of state.positions) {
+    const last = state.history[p.sym][state.history[p.sym].length-1];
+    pnl += (last.c - p.openPrice) * (p.dir==='buy'?1:-1) * p.size;
+  }
+  return pnl;
+}
+function calcEquity() { return state.balance + floatingPnl(); }
+
+function render() {
+  const symName = state.currentSym;
+  const sym = SYMBOLS[symName];
+  const hist = state.history[symName];
+  const last = hist[hist.length-1];
+  const prev = hist[hist.length-2] || last;
+  const eq = calcEquity();
+  const used = state.positions.reduce((s,p)=>s+p.margin,0);
+
+  // 价格
+  const pe = document.getElementById('price');
+  pe.textContent = last.c.toFixed(sym.digits);
+  pe.className = 'price-big ' + (last.c > prev.c ? 'pos' : last.c < prev.c ? 'neg' : '');
+  const chg = (last.c - prev.c)/sym.pip;
+  document.getElementById('tickInfo').textContent = (chg>=0?'+':'') + chg.toFixed(1) + ' pips';
+
+  // 账户
+  const eqEl = document.getElementById('equity');
+  eqEl.textContent = eq.toFixed(2);
+  eqEl.className = 'equity-big ' + (eq >= INIT_BALANCE ? 'pos' : 'neg');
+  document.getElementById('balance').textContent = state.balance.toFixed(2);
+  document.getElementById('free').textContent = (eq-used).toFixed(2);
+  const totalPnl = state.closed.reduce((s,c)=>s+c.pnl,0) + floatingPnl();
+  const tpEl = document.getElementById('totalPnl');
+  tpEl.textContent = (totalPnl>=0?'+':'') + totalPnl.toFixed(2);
+  tpEl.className = totalPnl>=0?'pos':'neg';
+  const wins = state.closed.filter(c=>c.pnl>0).length;
+  document.getElementById('winRate').textContent = state.closed.length ? Math.round(wins/state.closed.length*100)+'%' : '--';
+
+  // 币种
+  document.getElementById('symBar').innerHTML = Object.entries(SYMBOLS).map(([n,s])=>{
+    const h = state.history[n][state.history[n].length-1];
+    const p = state.history[n][state.history[n].length-2] || h;
+    const dir = h.c>=p.c ? 'pos' : 'neg';
+    return `<div class="sym ${n===state.currentSym?'active':''}" onclick="switchSym('${n}')">
+      ${n}<span class="p ${dir}">${h.c.toFixed(s.digits)}</span>
+    </div>`;
+  }).join('');
+
+  // 持仓
+  document.getElementById('posCount').textContent = state.positions.length;
+  document.getElementById('positions').innerHTML = state.positions.length
+    ? state.positions.map((p,i)=>{
+        const s = SYMBOLS[p.sym];
+        const lp = state.history[p.sym][state.history[p.sym].length-1];
+        const pnl = (lp.c - p.openPrice) * (p.dir==='buy'?1:-1) * p.size;
+        return `<div class="pos-item">
+          <div class="left">
+            <b style="color:${p.dir==='buy'?'#ff5252':'#2ed573'}">${p.sym} ${p.dir==='buy'?'▲BUY':'▼SELL'}</b>
+            <div class="pnl ${pnl>=0?'pos':'neg'}">${pnl>=0?'+':''}${pnl.toFixed(2)}</div>
+          </div>
+          <button class="close" onclick="closePos(${i})">平仓</button>
+        </div>`;
+      }).join('')
+    : '<div class="empty">无持仓</div>';
+
+  // 底部固定条
+  document.getElementById('fbEquity').textContent = eq.toFixed(0);
+  const fp = document.getElementById('fbPnl');
+  fp.textContent = (floatingPnl()>=0?'+':'') + floatingPnl().toFixed(0);
+  fp.className = 'v ' + (floatingPnl()>=0?'pos':'neg');
+  document.getElementById('fbPos').textContent = state.positions.length;
+
+  drawChart();
+  drawEquity();
+}
+
+function switchSym(n) { state.currentSym = n; render(); }
+
+function drawChart() {
+  const cv = document.getElementById('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== W*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const hist = state.history[state.currentSym];
+  const shows = hist.slice(-60);
+  const highs = shows.map(k=>k.h), lows = shows.map(k=>k.l);
+  const max = Math.max(...highs), min = Math.min(...lows);
+  const pad = (max-min)*0.05 || 0.001;
+  const yMax = max+pad, yMin = min-pad;
+  const bw = W / shows.length;
+
+  ctx.strokeStyle = '#1a2230'; ctx.lineWidth = 1;
+  for (let i=0;i<4;i++){ const y = H/3*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  shows.forEach((k,i)=>{
+    const x = i*bw + bw/2;
+    const yo = H - (k.o-yMin)/(yMax-yMin)*H;
+    const yc = H - (k.c-yMin)/(yMax-yMin)*H;
+    const yh = H - (k.h-yMin)/(yMax-yMin)*H;
+    const yl = H - (k.l-yMin)/(yMax-yMin)*H;
+    const up = k.c >= k.o;
+    ctx.strokeStyle = up ? '#ff5252' : '#2ed573';
+    ctx.fillStyle = up ? '#ff5252' : '#2ed573';
+    ctx.beginPath(); ctx.moveTo(x,yh); ctx.lineTo(x,yl); ctx.stroke();
+    const top = Math.min(yo,yc), hgt = Math.max(2, Math.abs(yc-yo));
+    ctx.fillRect(x-bw*0.35, top, bw*0.7, hgt);
+  });
+
+  const last = shows[shows.length-1];
+  const y = H - (last.c-yMin)/(yMax-yMin)*H;
+  ctx.strokeStyle = '#4fc3f7'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawEquity() {
+  const cv = document.getElementById('equityCurve');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== W*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  state.equityHistory.push(calcEquity());
+  if (state.equityHistory.length > 200) state.equityHistory.shift();
+  const min = Math.min(...state.equityHistory, INIT_BALANCE);
+  const max = Math.max(...state.equityHistory, INIT_BALANCE);
+  const range = max-min || 1;
+
+  ctx.strokeStyle = '#4fc3f7'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  state.equityHistory.forEach((v,i)=>{
+    const x = i/(state.equityHistory.length-1)*W;
+    const y = H - (v-min)/range*(H-8) - 4;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  ctx.strokeStyle = '#444'; ctx.setLineDash([3,3]);
+  const y0 = H - (INIT_BALANCE-min)/range*(H-8) - 4;
+  ctx.beginPath(); ctx.moveTo(0,y0); ctx.lineTo(W,y0); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function toast(msg) { logMsg(msg, 'err'); }
+function logMsg(msg, type='') {
+  const el = document.getElementById('logBody');
+  const div = document.createElement('div');
+  if (type==='err') div.style.color='#ff5252';
+  if (type==='pos') div.style.color='#00e676';
+  if (type==='neg') div.style.color='#ff5252';
+  div.textContent = '['+new Date().toLocaleTimeString()+'] '+msg;
+  el.insertBefore(div, el.firstChild);
+  if (el.children.length > 50) el.removeChild(el.lastChild);
+}
+
+// 屏幕旋转/尺寸变化时重绘
+window.addEventListener('resize', () => { drawChart(); drawEquity(); });
+
+setInterval(tick, 800);
+logMsg('FX 手机版启动');
+render();
+</script>
+</body>
+</html>
